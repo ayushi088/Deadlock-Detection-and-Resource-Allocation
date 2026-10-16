@@ -42,4 +42,3 @@ CREATE TABLE IF NOT EXISTS safety_results (
     safe_sequence VARCHAR(255),
     checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-```
