@@ -1,4 +1,3 @@
-```sql
 CREATE DATABASE IF NOT EXISTS deadlock_project;
 USE deadlock_project;
 
