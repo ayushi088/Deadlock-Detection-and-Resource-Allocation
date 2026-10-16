@@ -1,172 +1,92 @@
+#include "rag_cycle_detection.h"
 
-#include <iostream>
-#include <vector>
-#include <string>
 #include <algorithm>
-using namespace std;
+#include <limits>
+#include <stdexcept>
+#include <string>
+#include <utility>
 
-class RAGCycleDetection {
-private:
-    int V;
-    vector<vector<int>> adj;
-    vector<string> nodeName;
+RAGCycleDetection::RAGCycleDetection(int processes, int resources)
+    : V(0), processCount(processes)
+{
+    if (processes < 0 || resources < 0)
+        throw std::invalid_argument("Process and resource counts cannot be negative.");
+    if (processes > std::numeric_limits<int>::max() - resources)
+        throw std::length_error("Combined RAG node count is too large.");
 
-    bool dfs(int node, vector<int>& visited, vector<int>& pathVisited, vector<int>& parent, int& cycleStart, int& cycleEnd){
-        visited[node] = 1;
-        pathVisited[node] = 1;
+    V = processes + resources;
+    adj.resize(static_cast<std::size_t>(V));
+    nodeName.resize(static_cast<std::size_t>(V));
+}
 
-        for(int neighbor : adj[node]){
-            if(!visited[neighbor]){
-                parent[neighbor] = node;
+void RAGCycleDetection::setNodeName(int index, std::string name)
+{
+    if (index < 0 || index >= V)
+        throw std::out_of_range("RAG node index is out of range.");
+    nodeName[index] = std::move(name);
+}
 
-                if(dfs(neighbor, visited, pathVisited, parent, cycleStart, cycleEnd)){
-                    return true;
-                }
+void RAGCycleDetection::addEdge(int from, int to)
+{
+    if (from < 0 || from >= V || to < 0 || to >= V)
+        throw std::out_of_range("RAG edge endpoint is out of range.");
+    adj[from].push_back(to);
+}
+
+void RAGCycleDetection::dfs(int start, int node, std::vector<bool>& inPath,
+                            std::vector<int>& path,
+                            CycleDetectionResult& result) const
+{
+    for (int neighbor : adj[node])
+    {
+        if (neighbor == start)
+        {
+            std::vector<int> cycle = path;
+            cycle.push_back(start);
+
+            std::vector<std::string> namedCycle;
+            std::vector<int> processIds;
+            std::vector<int> resourceIds;
+            namedCycle.reserve(cycle.size());
+            for (int vertex : cycle)
+            {
+                namedCycle.push_back(nodeName[vertex]);
+                if (vertex < processCount &&
+                    std::find(processIds.begin(), processIds.end(), vertex) == processIds.end())
+                    processIds.push_back(vertex);
+                else if (vertex >= processCount &&
+                         std::find(resourceIds.begin(), resourceIds.end(),
+                                   vertex - processCount) == resourceIds.end())
+                    resourceIds.push_back(vertex - processCount);
             }
-            else if(pathVisited[neighbor]){
-                cycleStart = neighbor;
-                cycleEnd = node;
-                return true;
-            }
+
+            result.cyclePaths.push_back(std::move(namedCycle));
+            result.cycleProcessIds.push_back(std::move(processIds));
+            result.cycleResourceIds.push_back(std::move(resourceIds));
         }
-
-        pathVisited[node] = 0;
-        return false;
-    }
-
-public:
-    RAGCycleDetection(int vertices){
-        V = vertices;
-        adj.resize(V);
-        nodeName.resize(V);
-    }
-
-    void setNodeName(int index, string name){
-        nodeName[index] = name;
-    }
-
-    void addEdge(int from, int to){
-        adj[from].push_back(to);
-    }
-
-    void detectCycle(){
-        vector<int> visited(V, 0);
-        vector<int> pathVisited(V, 0);
-        vector<int> parent(V, -1);
-
-        int cycleStart = -1;
-        int cycleEnd = -1;
-
-        for(int i = 0; i < V; i++){
-            if(!visited[i]){
-                if(dfs(i, visited, pathVisited, parent, cycleStart, cycleEnd)){
-                    vector<int> cycle;
-                    cycle.push_back(cycleStart);
-
-                    for(int v = cycleEnd; v != cycleStart; v = parent[v]){
-                        cycle.push_back(v);
-                    }
-
-                    cycle.push_back(cycleStart);
-                    reverse(cycle.begin(), cycle.end());
-
-                    cout << "\n========== RESULT ==========\n";
-                    cout << "Cycle detected!\n";
-                    cout << "Cycle path: ";
-
-                    for(int i = 0; i < cycle.size(); i++){
-                        cout << nodeName[cycle[i]];
-                        if (i < cycle.size() - 1)
-                            cout << " -> ";
-                    }
-
-                    cout << "\n============================\n";
-                    return;
-                }
-            }
+        else if (neighbor > start && !inPath[neighbor])
+        {
+            inPath[neighbor] = true;
+            path.push_back(neighbor);
+            dfs(start, neighbor, inPath, path, result);
+            path.pop_back();
+            inPath[neighbor] = false;
         }
-
-        cout << "\nNo cycle detected in the graph.\n";
     }
-};
+}
 
-int main() {
-    int P, R;
+CycleDetectionResult RAGCycleDetection::detectCycle() const
+{
+    CycleDetectionResult result{false, {}, {}, {}};
 
-    cout << "===== RAG CYCLE DETECTION =====\n";
-    cout << "Enter number of processes: ";
-    cin >> P;
-
-    cout << "Enter number of resource types: ";
-    cin >> R;
-
-    if(P < 1 || R < 1){
-        cout << "Invalid input. Counts must be positive.\n";
-        return 1;
+    for (int start = 0; start < V; ++start)
+    {
+        std::vector<bool> inPath(V, false);
+        std::vector<int> path{start};
+        inPath[start] = true;
+        dfs(start, start, inPath, path, result);
     }
 
-    int V = P + R;
-    RAGCycleDetection rag(V);
-
-    // Processes get indices 0 to P-1.
-    // Resources get indices P to P+R-1.
-
-    for(int i = 0; i < P; i++){
-        rag.setNodeName(i, "P" + to_string(i));
-    }
-
-    for(int i = 0; i < R; i++){
-        rag.setNodeName(P + i, "R" + to_string(i));
-    }
-
-    cout << "\nProcesses: ";
-    for(int i = 0; i < P; i++)
-        cout << "P" << i << " ";
-
-    cout << "\nResources: ";
-    for(int i = 0; i < R; i++)
-        cout << "R" << i << " ";
-
-    cout << "\n\nEnter allocation edges (Resource -> Process).\n";
-    int A;
-    cout << "Number of allocation edges: ";
-    cin >> A;
-
-    for(int i = 0; i < A; i++){
-        int resource, process;
-        cout << "Allocation " << i + 1 << " (resource index, process index): ";
-        cin >> resource >> process;
-
-        if(resource < 0 || resource >= R || process < 0 || process >= P){
-            cout << "Invalid indices. Try this edge again.\n";
-            i--;
-            continue;
-        }
-
-        rag.addEdge(P + resource, process);
-    }
-
-    cout << "\nEnter request edges (Process -> Resource).\n";
-    int Q;
-    cout << "Number of request edges: ";
-    cin >> Q;
-
-    for(int i = 0; i < Q; i++){
-        int process, resource;
-        cout << "Request " << i + 1 << " (process index, resource index): ";
-        cin >> process >> resource;
-
-        if(process < 0 || process >= P || resource < 0 || resource >= R){
-            cout << "Invalid indices. Try this edge again.\n";
-            i--;
-            continue;
-        }
-
-        rag.addEdge(process, P + resource);
-    }
-
-    cout << "\nChecking graph for cycles...\n";
-    rag.detectCycle();
-
-    return 0;
+    result.hasCycle = !result.cyclePaths.empty();
+    return result;
 }
