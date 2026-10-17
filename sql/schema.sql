@@ -160,12 +160,3 @@ CREATE TABLE IF NOT EXISTS RECOVERY_LOG (
         REFERENCES PROCESS(process_id)
 );
 
---Indexes for reports and history
-CREATE INDEX idx_deadlock_detected_at
-    ON DEADLOCK_EVENT(detected_at);
-
-CREATE INDEX idx_deadlock_status
-    ON DEADLOCK_EVENT(event_status);
-
-CREATE INDEX idx_recovery_event
-    ON RECOVERY_LOG(event_id);
