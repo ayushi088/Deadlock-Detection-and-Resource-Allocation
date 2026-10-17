@@ -94,14 +94,13 @@ void MemoryManager::deallocateMemory(int pid)
         }
     }
 
-    pageTable.erase(
-        remove_if(
-            pageTable.begin(), pageTable.end(),
-            [pid](const PageTableEntry& entry)
-            {
-                return entry.pid == pid;
-            }),
-        pageTable.end());
+   for (int i = 0; i < pageTable.size(); )
+{
+    if (pageTable[i].pid == pid)
+        pageTable.erase(pageTable.begin() + i);
+    else
+        i++;
+}
 
     if (found)
         cout << "Memory released for PID " << pid << ".\n";
