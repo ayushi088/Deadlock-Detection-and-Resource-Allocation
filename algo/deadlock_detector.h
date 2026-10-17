@@ -6,25 +6,25 @@
 #include <string>
 #include <vector>
 
-struct CycleReport
-{
-    std::vector<std::string> path;
-    std::vector<int> processIds;
+using namespace std;
+
+struct CycleReport{
+    vector<string> path;
+    vector<int> processIds;
     bool allResourcesSingleInstance = false;
 };
 
-struct DeadlockReport
-{
+struct DeadlockReport{
     bool deadlockDetected = false;
-    std::vector<int> deadlockedProcesses;
-    std::vector<CycleReport> cycles;
+    vector<int> deadlockedProcesses;
+    vector<CycleReport> cycles;
     bool matrixDetectionUsed = false;
 };
 
 DeadlockReport runDeadlockDetection(
-    const std::vector<int>& available,
-    const std::vector<std::vector<int>>& allocation,
-    const std::vector<std::vector<int>>& request);
+    const vector<int>& available,
+    const vector<vector<int>>& allocation,
+    const vector<vector<int>>& request);
 
 void printDeadlockReport(const DeadlockReport& report);
 

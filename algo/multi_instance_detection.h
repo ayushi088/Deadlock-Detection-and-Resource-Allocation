@@ -3,19 +3,19 @@
 
 #include <vector>
 
-struct MultiInstanceResult
-{
+using namespace std;
+
+struct MultiInstanceResult{
     bool deadlockDetected;
-    std::vector<int> deadlockedProcesses;
+    vector<int> deadlockedProcesses;
 };
 
-class MultipleInstanceDetection
-{
+class MultipleInstanceDetection{
 public:
     MultiInstanceResult detectDeadlock(
-        const std::vector<int>& available,
-        const std::vector<std::vector<int>>& allocation,
-        const std::vector<std::vector<int>>& request) const;
+        const vector<int>& available,
+        const vector<vector<int>>& allocation,
+        const vector<vector<int>>& request) const;
 };
 
 #endif

@@ -4,29 +4,29 @@
 #include <string>
 #include <vector>
 
-struct CycleDetectionResult
-{
+using namespace std;
+
+struct CycleDetectionResult{
     bool hasCycle;
-    std::vector<std::vector<std::string>> cyclePaths;
-    std::vector<std::vector<int>> cycleProcessIds;
-    std::vector<std::vector<int>> cycleResourceIds;
+    vector<vector<string>> cyclePaths;
+    vector<vector<int>> cycleProcessIds;
+    vector<vector<int>> cycleResourceIds;
 };
 
-class RAGCycleDetection
-{
+class RAGCycleDetection{
 private:
-    int V;
+    int nodeCount;
     int processCount;
-    std::vector<std::vector<int>> adj;
-    std::vector<std::string> nodeName;
+    vector<vector<int>> adjacencyList;
+    vector<string> nodeName;
 
-    void dfs(int start, int node, std::vector<bool>& inPath,
-             std::vector<int>& path, CycleDetectionResult& result) const;
+    void dfs(int start, int node, vector<bool>& inPath,
+             vector<int>& path, CycleDetectionResult& result) const;
 
 public:
     RAGCycleDetection(int processes, int resources);
 
-    void setNodeName(int index, std::string name);
+    void setNodeName(int index, string name);
     void addEdge(int from, int to);
     CycleDetectionResult detectCycle() const;
 };
