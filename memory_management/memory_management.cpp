@@ -1,17 +1,19 @@
-
 #include "memory_management.h"
 
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
 #include <stdexcept>
+
+using namespace std;
+
 MemoryManager::MemoryManager(int memorySize, int pageSize)
     : totalMemory(memorySize), frameSize(pageSize)
 {
     if (memorySize <= 0 || pageSize <= 0 ||
         memorySize % pageSize != 0)
     {
-        throw std::invalid_argument(
+        throw invalid_argument(
             "Memory size must be positive and divisible by frame size.");
     }
 
@@ -27,7 +29,7 @@ void MemoryManager::allocateMemory(int pid, int processSize)
 {
     if (pid <= 0 || processSize <= 0)
     {
-        std::cout << "Invalid PID or process size.\n";
+        cout << "Invalid PID or process size.\n";
         return;
     }
 
@@ -35,8 +37,8 @@ void MemoryManager::allocateMemory(int pid, int processSize)
     {
         if (entry.pid == pid)
         {
-            std::cout << "Memory already allocated to PID "
-                      << pid << ".\n";
+            cout << "Memory already allocated to PID "
+                 << pid << ".\n";
             return;
         }
     }
@@ -44,6 +46,7 @@ void MemoryManager::allocateMemory(int pid, int processSize)
     int requiredPages = (processSize + frameSize - 1) / frameSize;
 
     int freeFrames = 0;
+
     for (const auto& frame : frames)
     {
         if (frame.pid == 0)
@@ -52,7 +55,7 @@ void MemoryManager::allocateMemory(int pid, int processSize)
 
     if (requiredPages > freeFrames)
     {
-        std::cout << "Not enough free memory frames.\n";
+        cout << "Not enough free memory frames.\n";
         return;
     }
 
@@ -73,8 +76,8 @@ void MemoryManager::allocateMemory(int pid, int processSize)
         }
     }
 
-    std::cout << "Memory allocated successfully to PID "
-              << pid << ".\n";
+    cout << "Memory allocated successfully to PID "
+         << pid << ".\n";
 }
 
 void MemoryManager::deallocateMemory(int pid)
@@ -92,7 +95,7 @@ void MemoryManager::deallocateMemory(int pid)
     }
 
     pageTable.erase(
-        std::remove_if(
+        remove_if(
             pageTable.begin(), pageTable.end(),
             [pid](const PageTableEntry& entry)
             {
@@ -101,29 +104,29 @@ void MemoryManager::deallocateMemory(int pid)
         pageTable.end());
 
     if (found)
-        std::cout << "Memory released for PID " << pid << ".\n";
+        cout << "Memory released for PID " << pid << ".\n";
     else
-        std::cout << "No memory allocation found for PID "
-                  << pid << ".\n";
+        cout << "No memory allocation found for PID "
+             << pid << ".\n";
 }
 
 void MemoryManager::displayMemory() const
 {
-    std::cout << "\nPhysical Memory Frames\n";
-    std::cout << "Frame\tPID\tPage\n";
+    cout << "\nPhysical Memory Frames\n";
+    cout << "Frame\tPID\tPage\n";
 
     for (const auto& frame : frames)
     {
-        std::cout << frame.frameId << '\t'
-                  << (frame.pid == 0 ? -1 : frame.pid) << '\t'
-                  << frame.pageNumber << '\n';
+        cout << frame.frameId << '\t'
+             << (frame.pid == 0 ? -1 : frame.pid) << '\t'
+             << frame.pageNumber << '\n';
     }
 }
 
 void MemoryManager::displayPageTable(int pid) const
 {
-    std::cout << "\nPage Table for PID " << pid << '\n';
-    std::cout << "Page\tFrame\n";
+    cout << "\nPage Table for PID " << pid << '\n';
+    cout << "Page\tFrame\n";
 
     bool found = false;
 
@@ -131,14 +134,14 @@ void MemoryManager::displayPageTable(int pid) const
     {
         if (entry.pid == pid)
         {
-            std::cout << entry.pageNumber << '\t'
-                      << entry.frameId << '\n';
+            cout << entry.pageNumber << '\t'
+                 << entry.frameId << '\n';
             found = true;
         }
     }
 
     if (!found)
-        std::cout << "No page table entries found.\n";
+        cout << "No page table entries found.\n";
 }
 
 void MemoryManager::displayStatistics() const
@@ -157,7 +160,7 @@ void MemoryManager::displayStatistics() const
 
     for (int pid = 1; ; pid++)
     {
-        // Internal fragmentation is calculated per process
+        // Internal fragmentation will be calculated
         // in the next refinement of the module.
         if (pid > 0)
             break;
@@ -166,13 +169,14 @@ void MemoryManager::displayStatistics() const
     double utilization =
         (static_cast<double>(allocatedMemory) / totalMemory) * 100.0;
 
-    std::cout << "\nMemory Statistics\n";
-    std::cout << "Total memory: " << totalMemory << '\n';
-    std::cout << "Allocated memory: " << allocatedMemory << '\n';
-    std::cout << "Free memory: " << freeMemory << '\n';
-    std::cout << "Internal fragmentation: "
-              << internalFragmentation << '\n';
-    std::cout << std::fixed << std::setprecision(2);
-    std::cout << "Memory utilization: "
-              << utilization << "%\n";
+    cout << "\nMemory Statistics\n";
+    cout << "Total memory: " << totalMemory << '\n';
+    cout << "Allocated memory: " << allocatedMemory << '\n';
+    cout << "Free memory: " << freeMemory << '\n';
+    cout << "Internal fragmentation: "
+         << internalFragmentation << '\n';
+
+    cout << fixed << setprecision(2);
+    cout << "Memory utilization: "
+         << utilization << "%\n";
 }
