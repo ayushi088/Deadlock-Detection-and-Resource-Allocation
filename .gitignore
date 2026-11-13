@@ -1,0 +1,3 @@
+*.exe
+latest_scheduling_run.sql
+src/latest_scheduling_run.sql
