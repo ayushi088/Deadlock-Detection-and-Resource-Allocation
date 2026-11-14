@@ -14,12 +14,12 @@ MultiInstanceResult MultipleInstanceDetection::detectDeadlock(
     const size_t processCount = allocation.size();
 
     if (request.size() != processCount)
-        throw invalid_argument("Allocation and request must have the same process count.");
+        throw invalid_argument("Invalid request matrix.");
 
     for (size_t process = 0; process < processCount; ++process){
         if (allocation[process].size() != resourceCount ||
             request[process].size() != resourceCount)
-            throw invalid_argument("Every matrix row must match the resource count.");
+            throw invalid_argument("Invalid matrix dimensions.");
     }
 
     for (int count : available)
@@ -28,6 +28,7 @@ MultiInstanceResult MultipleInstanceDetection::detectDeadlock(
 
     vector<long long> work(available.begin(), available.end());
     vector<bool> finish(processCount, false);
+    MultiInstanceResult result{false, {}};
 
     for (size_t process = 0; process < processCount; ++process){
         bool holdingResources = false;
@@ -38,8 +39,10 @@ MultiInstanceResult MultipleInstanceDetection::detectDeadlock(
                 holdingResources = true;
         }
 
-        if (!holdingResources)
+        if (!holdingResources){
             finish[process] = true;
+        }
+
     }
 
     bool progress = true;
@@ -63,11 +66,12 @@ MultiInstanceResult MultipleInstanceDetection::detectDeadlock(
                     work[resource] += allocation[process][resource];
                 finish[process] = true;
                 progress = true;
+                break;
             }
         }
     }
 
-    MultiInstanceResult result{false, {}};
+    
     for (size_t process = 0; process < processCount; ++process){
         if (!finish[process])
             result.deadlockedProcesses.push_back(static_cast<int>(process));
