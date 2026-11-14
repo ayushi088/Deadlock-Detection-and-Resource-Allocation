@@ -11,7 +11,6 @@ using namespace std;
 struct CycleReport{
     vector<string> path;
     vector<int> processIds;
-    bool allResourcesSingleInstance = false;
 };
 
 struct DeadlockReport{

@@ -25,7 +25,6 @@ DeadlockReport runDeadlockDetection(const vector<int>& available, const vector<v
         if (count < 0)
             throw invalid_argument("Available resource counts cannot be negative.");
 
-    vector<long long> totalInstances(available.begin(), available.end());
     for (size_t process = 0; process < processCount; ++process){
         if (allocation[process].size() != resourceCount ||
             request[process].size() != resourceCount)
@@ -34,7 +33,6 @@ DeadlockReport runDeadlockDetection(const vector<int>& available, const vector<v
         for (size_t resource = 0; resource < resourceCount; ++resource){
             if (allocation[process][resource] < 0 || request[process][resource] < 0)
                 throw invalid_argument("Allocation and request counts cannot be negative.");
-            totalInstances[resource] += allocation[process][resource];
         }
     }
 
@@ -48,8 +46,10 @@ DeadlockReport runDeadlockDetection(const vector<int>& available, const vector<v
     for (size_t process = 0; process < processCount; ++process){
         for (size_t resource = 0; resource < resourceCount; ++resource){
             const int resourceNode = static_cast<int>(processCount + resource);
+            
             if (allocation[process][resource] > 0)
                 rag.addEdge(resourceNode, static_cast<int>(process));
+            
             if (request[process][resource] > 0)
                 rag.addEdge(static_cast<int>(process), resourceNode);
         }
@@ -63,39 +63,15 @@ DeadlockReport runDeadlockDetection(const vector<int>& available, const vector<v
         CycleReport cycle;
         cycle.path = ragResult.cyclePaths[index];
         cycle.processIds = ragResult.cycleProcessIds[index];
-        cycle.allResourcesSingleInstance = true;
 
-        for (int resource : ragResult.cycleResourceIds[index]){
-            if (resource < 0 || 
-                static_cast<size_t>(resource) >= totalInstances.size() ||
-                totalInstances[static_cast<size_t>(resource)] != 1)
-                cycle.allResourcesSingleInstance = false;
-        }
         report.cycles.push_back(move(cycle));
     }
 
-    bool hasMultipleInstanceResource = false;
-    for (long long count : totalInstances){
-        if (count > 1){
-            hasMultipleInstanceResource = true;
-            break;
-        }
-    }
-
-    if (hasMultipleInstanceResource){
-        report.matrixDetectionUsed = true;
-        const MultiInstanceResult matrixResult =
-            MultipleInstanceDetection().detectDeadlock(available, allocation, request);
+    report.matrixDetectionUsed = true;
+    const MultiInstanceResult matrixResult =
+        MultipleInstanceDetection().detectDeadlock(available, allocation, request);
+    
         report.deadlockedProcesses = matrixResult.deadlockedProcesses;
-    }
-
-    for (const CycleReport& cycle : report.cycles){
-        if (cycle.allResourcesSingleInstance){
-            report.deadlockedProcesses.insert(report.deadlockedProcesses.end(),
-                                               cycle.processIds.begin(),
-                                               cycle.processIds.end());
-        }
-    }
 
     sort(report.deadlockedProcesses.begin(), report.deadlockedProcesses.end());
     report.deadlockedProcesses.erase(
