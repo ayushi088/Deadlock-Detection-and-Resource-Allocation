@@ -1,20 +1,18 @@
-
 #include "scheduler.h"
 #include "../memory_management/memory_management.h"
-
+#include "../memory_statistics/memory_statistics.h"
 #include <iostream>
+#include <vector>
 #include <limits>
 #include <stdexcept>
-
 int main()
 {
     std::vector<Process> processes;
-
     // Physical memory: 64 KB, frame size: 4 KB
     MemoryManager memory(64, 4);
-
+    // Create Memory Statistics object
+    MemoryStatistics statistics(memory);
     int choice = -1;
-
     do
     {
         std::cout << "\n===== Process Management + CPU Scheduling =====\n"
@@ -41,34 +39,27 @@ int main()
             std::cout << "Please enter a number.\n";
             continue;
         }
-
         switch (choice)
         {
         case 1:
             createProcess(processes);
             break;
-
         case 2:
             displayProcesses(processes);
             break;
-
         case 3:
             terminateProcess(processes);
             break;
-
         case 4:
             scheduleFCFS(processes);
             break;
-
         case 5:
             scheduleSJF(processes);
             break;
-
         case 6:
         {
             int quantum;
             std::cout << "Enter time quantum: ";
-
             if (std::cin >> quantum)
                 scheduleRoundRobin(processes, quantum);
             else
@@ -80,71 +71,54 @@ int main()
             }
             break;
         }
-
         case 7:
             schedulePriority(processes);
             break;
-
         case 8:
             if (exportLatestRunToSql("latest_scheduling_run.sql"))
                 std::cout << "Saved latest_scheduling_run.sql.\n";
             else
                 std::cout << "Run a scheduling algorithm before exporting.\n";
             break;
-
         case 9:
         {
             int pid, size;
-
             std::cout << "Enter process ID: ";
             std::cin >> pid;
-
             std::cout << "Enter process size in KB: ";
             std::cin >> size;
-
             memory.allocateMemory(pid, size);
             break;
         }
-
         case 10:
         {
             int pid;
-
             std::cout << "Enter process ID to deallocate: ";
             std::cin >> pid;
-
             memory.deallocateMemory(pid);
             break;
         }
-
         case 11:
             memory.displayMemory();
             break;
-
         case 12:
         {
             int pid;
-
             std::cout << "Enter process ID: ";
             std::cin >> pid;
-
             memory.displayPageTable(pid);
             break;
         }
-
         case 13:
-            memory.displayStatistics();
+            statistics.displayStatistics();
             break;
-
         case 0:
             std::cout << "Exiting.\n";
             break;
-
         default:
             std::cout << "Invalid choice.\n";
         }
 
     } while (choice != 0);
-
     return 0;
 }
