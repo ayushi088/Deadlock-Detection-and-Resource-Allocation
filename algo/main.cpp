@@ -1,4 +1,5 @@
 #include "deadlock_detector.h"
+#include "deadlock_recovery.h"
 
 #include <exception>
 #include <iostream>
@@ -64,12 +65,44 @@ int main(){
     }
 
     try{
-        printDeadlockReport(runDeadlockDetection(available, allocation, request));
+    DeadlockReport report = runDeadlockDetection(
+        available, allocation, request);
+
+    printDeadlockReport(report);
+
+    if (report.deadlockDetected){
+        int choice;
+
+        cout << "\n===== DEADLOCK RECOVERY =====\n";
+        cout << "1. Process Termination\n";
+        cout << "2. Resource Preemption\n";
+        cout << "Enter your choice: ";
+
+        if (!(cin >> choice) || (choice != 1 && choice != 2)){
+            cerr << "Invalid choice.\n";
+            return 1;
+        }
+
+        RecoveryMethod method;
+
+        if (choice == 1)
+            method = RecoveryMethod::Termination;
+        else
+            method = RecoveryMethod::Preemption;
+
+        RecoveryResult recovery = recoverDeadlock(
+            available, allocation, request, method);
+
+        printRecoveryReport(recovery);
     }
-    catch (const exception& error){
-        cerr << "Detection failed: " << error.what() << '\n';
-        return 1;
+    else{
+        cout << "\nNo deadlock detected. Recovery is not required.\n";
     }
+}
+catch (const exception& error){
+    cerr << "Program failed: " << error.what() << '\n';
+    return 1;
+}
 
     return 0;
 }
