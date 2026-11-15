@@ -13,3 +13,11 @@ add_executable(process_scheduling
     memory_management/memory_management.cpp
     memory_statistics/memory_statistics.cpp
 )
+
+add_executable(deadlock_test
+    tests/deadlock_test_main.cpp
+    algo/deadlock_detector.cpp
+    algo/deadlock_recovery.cpp
+    algo/rag_cycle_detection.cpp
+    algo/multi_instance_detection.cpp
+)
