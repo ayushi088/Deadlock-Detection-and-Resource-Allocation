@@ -399,9 +399,9 @@ bool exportLatestRunToSql(const std::string& filePath)
         output << "INSERT INTO PROCESS "
                   "(process_id, arrival_time, burst_time, priority) VALUES ("
                << p.pid << ", " << p.arrivalTime << ", " << p.burstTime
-               << ", " << p.priority
-               << ") ON DUPLICATE KEY UPDATE arrival_time = VALUES(arrival_time), "
-                  "burst_time = VALUES(burst_time), priority = VALUES(priority);\n";
+               << ", "                << p.priority
+               << ") ON CONFLICT (process_id) DO UPDATE SET arrival_time = EXCLUDED.arrival_time, "
+                  "burst_time = EXCLUDED.burst_time, priority = EXCLUDED.priority;\n";
     output << "INSERT INTO SCHEDULING_RUN "
               "(run_id, algorithm, time_quantum) VALUES ("
            << latestRun.runId << ", '" << latestRun.algorithm << "', "
@@ -420,4 +420,31 @@ bool exportLatestRunToSql(const std::string& filePath)
                << r.waitingTime << ", " << r.responseTime << ");\n";
     output << "COMMIT;\n";
     return true;
+}
+
+bool runScheduling(std::vector<Process>& processes,
+                   const std::string& algorithm, int quantum)
+{
+    bool hasActiveProcess = false;
+    for (const Process& process : processes)
+        if (!process.terminated)
+            hasActiveProcess = true;
+    if (!hasActiveProcess)
+        return false;
+    if (algorithm == "FCFS")
+        scheduleFCFS(processes);
+    else if (algorithm == "SJF")
+        scheduleSJF(processes);
+    else if (algorithm == "ROUND_ROBIN")
+        scheduleRoundRobin(processes, quantum);
+    else if (algorithm == "PRIORITY")
+        schedulePriority(processes);
+    else
+        return false;
+    return true;
+}
+
+const SchedulingRun* latestSchedulingRun()
+{
+    return hasLatestRun ? &latestRun : nullptr;
 }

@@ -1,9 +1,10 @@
-// Configure this URL to point at the HTTP adapter for the existing C++/MySQL service.
-export const API_BASE_URL = window.SAFESTATE_API_BASE_URL || localStorage.getItem('safestate_api_url') || '';
+// Configure this URL to point at the SafeState C++ HTTP service.
+export const API_BASE_URL = window.SAFESTATE_API_BASE_URL || localStorage.getItem('safestate_api_url') || 'http://localhost:8081';
 
 export const ENDPOINTS = {
   dashboard: '/api/dashboard', processes: '/api/processes', resources: '/api/resources',
   allocations: '/api/allocations', request: '/api/allocations/request', release: '/api/allocations/release',
+  scheduling: { fcfs: '/api/scheduling/fcfs', sjf: '/api/scheduling/sjf', roundRobin: '/api/scheduling/round-robin', priority: '/api/scheduling/priority' },
   banker: '/api/algorithms/banker', deadlock: '/api/algorithms/deadlock', rag: '/api/graph/rag',
   history: '/api/history'
 };
@@ -14,10 +15,15 @@ function url(path) {
 
 async function request(path, options = {}) {
   if (!API_BASE_URL) throw new Error('Backend API URL is not configured. Set window.SAFESTATE_API_BASE_URL or safestate_api_url in localStorage.');
-  const response = await fetch(url(path), {
-    ...options,
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(options.headers || {}) }
-  });
+  let response;
+  try {
+    response = await fetch(url(path), {
+      ...options,
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(options.headers || {}) }
+    });
+  } catch {
+    throw new Error(`Cannot reach the SafeState backend at ${API_BASE_URL}. Start safestate_api on port 8081 or update the API URL in Settings.`);
+  }
   let payload;
   try { payload = await response.json(); } catch { payload = null; }
   if (!response.ok) throw new Error(payload?.message || payload?.error || `Backend request failed (${response.status}).`);
@@ -38,6 +44,7 @@ export const api = {
   getAllocations: () => request(ENDPOINTS.allocations),
   requestResource: (body) => request(ENDPOINTS.request, json('POST', body)),
   releaseResource: (body) => request(ENDPOINTS.release, json('POST', body)),
+  runScheduling: (algorithm, body) => request(ENDPOINTS.scheduling[algorithm], json('POST', body)),
   runBanker: (body) => request(ENDPOINTS.banker, json('POST', body)),
   detectDeadlock: () => request(ENDPOINTS.deadlock, json('POST', {})),
   getRag: () => request(ENDPOINTS.rag),
