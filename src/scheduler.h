@@ -62,7 +62,11 @@ void scheduleSJF(std::vector<Process>& processes);
 void scheduleRoundRobin(std::vector<Process>& processes, int quantum);
 void schedulePriority(std::vector<Process>& processes);
 
-// Writes the latest run as a transaction accepted by MySQL.
+// Writes the latest run as a PostgreSQL transaction script.
 bool exportLatestRunToSql(const std::string& filePath);
+
+bool runScheduling(std::vector<Process>& processes,
+                   const std::string& algorithm, int quantum = 0);
+const SchedulingRun* latestSchedulingRun();
 
 #endif

@@ -23,7 +23,7 @@ int main()
                      "5. SJF Scheduling (Non-preemptive)\n"
                      "6. Round Robin Scheduling\n"
                      "7. Priority Scheduling (Non-preemptive)\n"
-                     "8. Export Latest Result for MySQL\n"
+                     "8. Export Latest Result for PostgreSQL\n"
                      "9. Allocate Memory (Paging)\n"
                      "10. Deallocate Memory\n"
                      "11. Display Physical Memory\n"
