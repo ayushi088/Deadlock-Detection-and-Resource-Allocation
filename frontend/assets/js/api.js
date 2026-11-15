@@ -22,7 +22,7 @@ async function request(path, options = {}) {
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(options.headers || {}) }
     });
   } catch {
-    throw new Error(`Cannot reach the SafeState backend at ${API_BASE_URL}. Start safestate_api on port 8081 or update the API URL in Settings.`);
+    throw new Error(`Cannot reach the SafeState backend at ${API_BASE_URL}. Start safestate_api on port 8082 or update the API URL in Settings.`);
   }
   let payload;
   try { payload = await response.json(); } catch { payload = null; }
