@@ -9,3 +9,11 @@ add_executable(process_scheduling
     src/main.cpp
     src/scheduler.cpp
 )
+
+add_executable(deadlock_test
+    tests/deadlock_test_main.cpp
+    algo/deadlock_detector.cpp
+    algo/deadlock_recovery.cpp
+    algo/rag_cycle_detection.cpp
+    algo/multi_instance_detection.cpp
+)
