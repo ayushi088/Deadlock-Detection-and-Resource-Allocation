@@ -39,3 +39,16 @@ CREATE TABLE IF NOT EXISTS SYSTEM_METRICS (
     utilization_percent DECIMAL(5,2) NOT NULL,
     recorded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS PROCESS_MEMORY (
+    process_id INT PRIMARY KEY,
+    requested_size INT NOT NULL,
+    allocated_pages INT NOT NULL,
+    allocation_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CHECK (requested_size > 0),
+    CHECK (allocated_pages > 0),
+
+    FOREIGN KEY (process_id)
+        REFERENCES PROCESS(process_id)
+);
