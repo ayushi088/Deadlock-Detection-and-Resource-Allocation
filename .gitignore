@@ -1,3 +1,5 @@
 *.exe
+.env
+build/
 latest_scheduling_run.sql
 src/latest_scheduling_run.sql

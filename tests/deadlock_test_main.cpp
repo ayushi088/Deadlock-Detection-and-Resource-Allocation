@@ -1,5 +1,5 @@
-#include "deadlock_detector.h"
-#include "deadlock_recovery.h"
+#include "../src/algo/deadlock_detector.h"
+#include "../src/algo/deadlock_recovery.h"
 
 #include <exception>
 #include <iostream>

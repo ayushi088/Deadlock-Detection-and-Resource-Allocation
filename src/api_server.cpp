@@ -1,17 +1,3 @@
-#include "algo/deadlock_detector.h"
-#include "scheduler.h"
-
-#include <algorithm>
-#include <cerrno>
-#include <cstdlib>
-#include <cstring>
-#include <iostream>
-#include <map>
-#include <mutex>
-#include <sstream>
-#include <string>
-#include <vector>
-
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
@@ -25,6 +11,21 @@ const Socket InvalidSocket = INVALID_SOCKET;
 using Socket = int;
 const Socket InvalidSocket = -1;
 #endif
+
+#include "algo/deadlock_detector.h"
+#include "postgres_store.h"
+#include "scheduler.h"
+
+#include <algorithm>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <map>
+#include <mutex>
+#include <sstream>
+#include <string>
+#include <vector>
 
 namespace {
 
@@ -56,6 +57,33 @@ std::vector<Resource> resources;
 std::vector<Allocation> allocations;
 std::vector<std::string> history;
 std::mutex stateMutex;
+PostgresStore database;
+bool databaseReady = false;
+std::string errorJson(const std::string& message);
+
+bool reloadFromDatabase(std::string& error) {
+    std::vector<DbProcess> dbProcesses;
+    std::vector<DbResource> dbResources;
+    std::vector<DbAllocation> dbAllocations;
+    if (!database.load(dbProcesses, dbResources, dbAllocations, error))
+        return false;
+    processes.clear();
+    for (const DbProcess& item : dbProcesses)
+        processes.push_back({item.id, item.name, 0, 1, 1, item.state});
+    resources.clear();
+    for (const DbResource& item : dbResources)
+        resources.push_back({item.id, item.name, item.total, item.available});
+    allocations.clear();
+    for (const DbAllocation& item : dbAllocations)
+        allocations.push_back({item.processId, item.resourceId, item.allocated,
+                               item.requested});
+    return true;
+}
+
+std::string databaseError(int& status, const std::string& error) {
+    status = 503;
+    return errorJson("Database operation failed: " + error);
+}
 
 std::string jsonEscape(const std::string& value) {
     std::string result;
@@ -317,6 +345,13 @@ std::string handleRequest(const std::string& method, const std::string& path,
 
     if (method == "OPTIONS")
         return "{}";
+    if (!databaseReady)
+        return databaseError(status, "The PostgreSQL connection is not available.");
+    if (method == "GET") {
+        std::string error;
+        if (!reloadFromDatabase(error))
+            return databaseError(status, error);
+    }
 
     if (method == "GET" && path == "/api/processes")
         return "{\"processes\":" + arrayOfProcesses() + "}";
@@ -410,6 +445,10 @@ std::string handleRequest(const std::string& method, const std::string& path,
             status = 400;
             return errorJson("Process values are invalid.");
         }
+        std::string databaseMessage;
+        if (!database.createProcess({process.id, process.name, process.state},
+                                    databaseMessage))
+            return databaseError(status, databaseMessage);
         processes.push_back(process);
         history.push_back("Process P" + std::to_string(id) + " created");
         return "{\"message\":\"Process created\",\"process\":" + processJson(process) + "}";
@@ -423,6 +462,9 @@ std::string handleRequest(const std::string& method, const std::string& path,
             return errorJson("Process not found.");
         }
         if (method == "DELETE") {
+            std::string databaseMessage;
+            if (!database.deleteProcess(id, databaseMessage))
+                return databaseError(status, databaseMessage);
             processes.erase(std::remove_if(processes.begin(), processes.end(),
                                             [id](const Process& item) { return item.id == id; }),
                             processes.end());
@@ -442,6 +484,10 @@ std::string handleRequest(const std::string& method, const std::string& path,
             status = 400;
             return errorJson("Process values are invalid.");
         }
+        std::string databaseMessage;
+        if (!database.updateProcess({process->id, process->name, process->state},
+                                    databaseMessage))
+            return databaseError(status, databaseMessage);
         return "{\"message\":\"Process updated\",\"process\":" + processJson(*process) + "}";
     }
     if (method == "POST" && path == "/api/resources") {
@@ -456,6 +502,10 @@ std::string handleRequest(const std::string& method, const std::string& path,
             return errorJson("totalInstances cannot be negative.");
         }
         Resource resource{id, stringField(body, "resourceName", "Resource " + std::to_string(id)), total, total};
+        std::string databaseMessage;
+        if (!database.createResource({resource.id, resource.name, resource.total,
+                                      resource.available}, databaseMessage))
+            return databaseError(status, databaseMessage);
         resources.push_back(resource);
         history.push_back("Resource R" + std::to_string(id) + " created");
         return "{\"message\":\"Resource created\",\"resource\":" + resourceJson(resource) + "}";
@@ -469,6 +519,9 @@ std::string handleRequest(const std::string& method, const std::string& path,
             return errorJson("Resource not found.");
         }
         if (method == "DELETE") {
+            std::string databaseMessage;
+            if (!database.deleteResource(id, databaseMessage))
+                return databaseError(status, databaseMessage);
             resources.erase(std::remove_if(resources.begin(), resources.end(),
                                             [id](const Resource& item) { return item.id == id; }),
                             resources.end());
@@ -489,6 +542,10 @@ std::string handleRequest(const std::string& method, const std::string& path,
         resource->name = stringField(body, "resourceName", resource->name);
         resource->total = total;
         resource->available = total - allocated;
+        std::string databaseMessage;
+        if (!database.updateResource({resource->id, resource->name, resource->total,
+                                      resource->available}, databaseMessage))
+            return databaseError(status, databaseMessage);
         return "{\"message\":\"Resource updated\",\"resource\":" + resourceJson(*resource) + "}";
     }
     if (method == "POST" && (path == "/api/scheduling/fcfs" ||
@@ -539,34 +596,33 @@ std::string handleRequest(const std::string& method, const std::string& path,
         }
         Allocation* allocation = findAllocation(processId, resourceId);
         if (path.find("/request") != std::string::npos) {
-            if (resource->available < quantity) {
-                if (!allocation)
-                    allocations.push_back({processId, resourceId, 0, quantity});
-                else
-                    allocation->requested += quantity;
+            bool granted = false;
+            std::string databaseMessage;
+            if (!database.requestResource(processId, resourceId, quantity, granted,
+                                           databaseMessage))
+                return databaseError(status, databaseMessage);
+            if (!reloadFromDatabase(databaseMessage))
+                return databaseError(status, databaseMessage);
+            if (!granted) {
                 history.push_back("P" + std::to_string(processId) + " queued R" +
                                   std::to_string(resourceId) + " request");
                 status = 409;
                 return errorJson("The requested resource quantity is unavailable; request queued.");
             }
-            if (!allocation) {
-                allocations.push_back({processId, resourceId, quantity});
-            } else {
-                allocation->units += quantity;
-            }
-            if (allocation)
-                allocation->requested = 0;
-            resource->available -= quantity;
             history.push_back("P" + std::to_string(processId) + " requested R" +
                               std::to_string(resourceId));
-            return "{\"message\":\"Resource request granted\"}";
+            return granted ? "{\"message\":\"Resource request granted\"}" :
+                             errorJson("The requested resource quantity is unavailable; request queued.");
         }
         if (!allocation || allocation->units < quantity) {
             status = 409;
             return errorJson("The process does not hold that many instances.");
         }
-        allocation->units -= quantity;
-        resource->available += quantity;
+        std::string databaseMessage;
+        if (!database.releaseResource(processId, resourceId, quantity, databaseMessage))
+            return databaseError(status, databaseMessage);
+        if (!reloadFromDatabase(databaseMessage))
+            return databaseError(status, databaseMessage);
         history.push_back("P" + std::to_string(processId) + " released R" +
                           std::to_string(resourceId));
         return "{\"message\":\"Resources released\"}";
@@ -593,6 +649,10 @@ std::string handleRequest(const std::string& method, const std::string& path,
         }
         const DeadlockReport report =
             runDeadlockDetection(available, allocationMatrix, requestMatrix);
+        std::string databaseMessage;
+        std::string action = report.deadlockDetected ? "DETECTED" : "NO_DEADLOCK";
+        if (!database.logDeadlock(report.deadlockedProcesses, action, databaseMessage))
+            return databaseError(status, databaseMessage);
         std::string deadlocked = "[";
         for (std::size_t i = 0; i < report.deadlockedProcesses.size(); ++i) {
             if (i) deadlocked += ',';
@@ -618,22 +678,89 @@ void closeSocket(Socket socket) {
 }
 
 void serveClient(Socket client) {
-    char buffer[8192];
-    const int received = recv(client, buffer, sizeof(buffer) - 1, 0);
-    if (received <= 0) {
-        closeSocket(client);
-        return;
+    char buffer[4096];
+    std::string request;
+    std::size_t headerEnd = std::string::npos;
+    while ((headerEnd = request.find("\r\n\r\n")) == std::string::npos) {
+        const int received = recv(client, buffer, sizeof(buffer), 0);
+        if (received <= 0) {
+            closeSocket(client);
+            return;
+        }
+        request.append(buffer, static_cast<std::size_t>(received));
+        if (request.size() > 1024 * 1024) {
+            closeSocket(client);
+            return;
+        }
     }
-    buffer[received] = '\0';
-    const std::string request(buffer, received);
+
+    std::size_t contentLength = 0;
+    std::size_t contentLengthStart = request.find("Content-Length:");
+    if (contentLengthStart == std::string::npos)
+        contentLengthStart = request.find("content-length:");
+    if (contentLengthStart != std::string::npos) {
+        const char* value = request.c_str() + contentLengthStart + 15;
+        contentLength = static_cast<std::size_t>(std::strtoul(value, nullptr, 10));
+    }
+    const bool chunked =
+        request.find("Transfer-Encoding: chunked") != std::string::npos ||
+        request.find("transfer-encoding: chunked") != std::string::npos;
+    if (request.find("Expect: 100-continue") != std::string::npos) {
+        const std::string continueResponse = "HTTP/1.1 100 Continue\r\n\r\n";
+        send(client, continueResponse.c_str(),
+             static_cast<int>(continueResponse.size()), 0);
+    }
+    const std::size_t bodyStart = headerEnd + 4;
+    auto receiveMore = [&]() {
+        const int received = recv(client, buffer, sizeof(buffer), 0);
+        if (received <= 0)
+            return false;
+        request.append(buffer, static_cast<std::size_t>(received));
+        return request.size() <= 1024 * 1024 + bodyStart;
+    };
+    std::string body;
+    if (chunked) {
+        std::size_t cursor = bodyStart;
+        while (true) {
+            std::size_t chunkHeaderEnd = request.find("\r\n", cursor);
+            while (chunkHeaderEnd == std::string::npos) {
+                if (!receiveMore()) {
+                    closeSocket(client);
+                    return;
+                }
+                chunkHeaderEnd = request.find("\r\n", cursor);
+            }
+            const std::size_t chunkSize = static_cast<std::size_t>(
+                std::strtoul(request.substr(cursor, chunkHeaderEnd - cursor).c_str(),
+                             nullptr, 16));
+            cursor = chunkHeaderEnd + 2;
+            while (request.size() < cursor + chunkSize + 2) {
+                if (!receiveMore()) {
+                    closeSocket(client);
+                    return;
+                }
+            }
+            if (chunkSize == 0)
+                break;
+            body.append(request, cursor, chunkSize);
+            cursor += chunkSize + 2;
+        }
+    } else {
+        while (request.size() - bodyStart < contentLength) {
+            if (!receiveMore()) {
+                closeSocket(client);
+                return;
+            }
+        }
+        body = request.substr(bodyStart, contentLength);
+    }
+
     const std::size_t lineEnd = request.find("\r\n");
     const std::string requestLine = request.substr(0, lineEnd);
     std::istringstream line(requestLine);
     std::string method;
     std::string path;
     line >> method >> path;
-    const std::size_t bodyStart = request.find("\r\n\r\n");
-    const std::string body = bodyStart == std::string::npos ? "" : request.substr(bodyStart + 4);
     int status = 200;
     const std::string payload = handleRequest(method, path, body, status);
     const std::string response = "HTTP/1.1 " + std::to_string(status) +
@@ -656,6 +783,16 @@ int main() {
         return 1;
     }
 #endif
+    std::string databaseMessage;
+    if (!database.connect(databaseMessage)) {
+        std::cerr << "Could not connect to PostgreSQL: " << databaseMessage << '\n';
+        return 1;
+    }
+    if (!reloadFromDatabase(databaseMessage)) {
+        std::cerr << "Could not load PostgreSQL state: " << databaseMessage << '\n';
+        return 1;
+    }
+    databaseReady = true;
     const Socket server = socket(AF_INET, SOCK_STREAM, 0);
     if (server == InvalidSocket) {
         std::cerr << "Could not create HTTP server socket.\n";
@@ -664,14 +801,20 @@ int main() {
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = htonl(INADDR_ANY);
-    address.sin_port = htons(8081);
+    int port = 8081;
+    if (const char* configuredPort = std::getenv("SAFESTATE_PORT")) {
+        const int parsedPort = std::atoi(configuredPort);
+        if (parsedPort > 0 && parsedPort <= 65535)
+            port = parsedPort;
+    }
+    address.sin_port = htons(static_cast<unsigned short>(port));
     if (bind(server, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0 ||
         listen(server, 16) < 0) {
-        std::cerr << "Could not listen on http://localhost:8081.\n";
+        std::cerr << "Could not listen on http://localhost:" << port << ".\n";
         closeSocket(server);
         return 1;
     }
-    std::cout << "SafeState API listening on http://localhost:8081\n";
+    std::cout << "SafeState API listening on http://localhost:" << port << '\n';
     while (true) {
         Socket client = accept(server, nullptr, nullptr);
         if (client != InvalidSocket)

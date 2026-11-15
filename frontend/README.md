@@ -23,36 +23,45 @@ psql -d safestate -f ..\sql\schema.sql
 psql -d safestate -f ..\sql\memory_schema.sql
 ```
 
-The current local HTTP adapter does not read a database connection string yet;
-these scripts are the PostgreSQL foundation for the pending persistence layer.
+The C++ API uses PostgreSQL through `libpq`. Copy the repository's
+`.env.example` to `.env`, replace the password, and load it into the process
+environment before starting the API:
+
+```powershell
+Copy-Item ..\.env.example ..\.env
+Get-Content ..\.env | ForEach-Object {
+    if ($_ -match '^([^#=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2]) }
+}
+```
 
 ## Start the backend
 
 Build with CMake, then run the API executable:
 
 ```powershell
-cmake -S . -B build
+cmake -S . -B build -DPOSTGRESQL_ROOT="C:/Program Files/PostgreSQL/18"
 cmake --build build --config Release
 .\build\Release\safestate_api.exe
 ```
 
-The API listens on `http://localhost:8081` and enables CORS for the static frontend.
+The API listens on `http://localhost:8082` by default and enables CORS for the static frontend.
+Set `SAFESTATE_PORT=8081` if that port is available.
 
-The current adapter keeps its working state in memory for local development. The
-PostgreSQL DDL is provided in `sql/schema.sql` and `sql/memory_schema.sql`, but
-the adapter does not yet open a PostgreSQL connection or persist API mutations.
-Do not use this adapter as a production database-backed service until that
-repository layer is implemented.
+The API now loads and persists processes, resources, allocations, and deadlock
+logs using the four existing tables: `processes`, `resources`,
+`resource_allocation`, and `deadlock_logs`. The processes table supplies the
+status field; the legacy scheduling-only arrival, burst, and priority values
+remain API defaults because those columns are not present in the four tables.
 
 ## Connect another backend
 
 Configure another HTTP adapter URL in **Settings**, or before loading the app:
 
 ```html
-<script>window.SAFESTATE_API_BASE_URL = 'http://localhost:8081';</script>
+<script>window.SAFESTATE_API_BASE_URL = 'http://localhost:8082';</script>
 ```
 
-The same value can be stored with `localStorage.setItem('safestate_api_url', 'http://localhost:8081')`. Endpoint paths and request methods are centralized in `assets/js/api.js`; update `ENDPOINTS` to match the routes exposed by your existing adapter.
+The same value can be stored with `localStorage.setItem('safestate_api_url', 'http://localhost:8082')`. Endpoint paths and request methods are centralized in `assets/js/api.js`; update `ENDPOINTS` to match the routes exposed by your existing adapter.
 
 Expected JSON endpoints are documented in the Settings screen. Scheduling is
 available at `POST /api/scheduling/fcfs`, `/api/scheduling/sjf`,

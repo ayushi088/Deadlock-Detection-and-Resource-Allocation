@@ -1,6 +1,6 @@
 #include "scheduler.h"
-#include "../memory_management/memory_management.h"
-#include "../memory_statistics/memory_statistics.h"
+#include "memory_management/memory_management.h"
+#include "memory_statistics/memory_statistics.h"
 #include <iostream>
 #include <vector>
 #include <limits>

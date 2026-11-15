@@ -1,5 +1,5 @@
 // Configure this URL to point at the SafeState C++ HTTP service.
-export const API_BASE_URL = window.SAFESTATE_API_BASE_URL || localStorage.getItem('safestate_api_url') || 'http://localhost:8081';
+export const API_BASE_URL = window.SAFESTATE_API_BASE_URL || localStorage.getItem('safestate_api_url') || 'http://localhost:8082';
 
 export const ENDPOINTS = {
   dashboard: '/api/dashboard', processes: '/api/processes', resources: '/api/resources',
