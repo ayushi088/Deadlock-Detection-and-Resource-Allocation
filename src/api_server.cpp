@@ -20,6 +20,7 @@ const Socket InvalidSocket = -1;
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <mutex>
@@ -59,6 +60,25 @@ std::vector<std::string> history;
 std::mutex stateMutex;
 PostgresStore database;
 bool databaseReady = false;
+
+void loadDotEnv() {
+    std::ifstream file(".env");
+    std::string line;
+    while (std::getline(file, line)) {
+        const std::size_t separator = line.find('=');
+        if (separator == std::string::npos || line.empty() || line[0] == '#')
+            continue;
+        const std::string key = line.substr(0, separator);
+        std::string value = line.substr(separator + 1);
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+            value = value.substr(1, value.size() - 2);
+#ifdef _WIN32
+        _putenv_s(key.c_str(), value.c_str());
+#else
+        setenv(key.c_str(), value.c_str(), 0);
+#endif
+    }
+}
 std::string errorJson(const std::string& message);
 
 bool reloadFromDatabase(std::string& error) {
@@ -783,6 +803,7 @@ int main() {
         return 1;
     }
 #endif
+    loadDotEnv();
     std::string databaseMessage;
     if (!database.connect(databaseMessage)) {
         std::cerr << "Could not connect to PostgreSQL: " << databaseMessage << '\n';
